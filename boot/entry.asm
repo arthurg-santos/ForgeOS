@@ -1,4 +1,5 @@
 global _start
+global multiboot2_info_addr
 extern kernel_main
 
 section .bss
@@ -8,11 +9,20 @@ pdpt_table: resb 4096
 pd_table:   resb 4096
 stack_bottom: resb 16384
 stack_top:
+multiboot2_info_addr: resq 1
 
 section .text
 bits 32
 _start:
     mov esp, stack_top
+
+    ; Salvar o ponteiro do Multiboot2 info (EBX) e validar o magic (EAX).
+    ; O GRUB entrega EAX=0x36D76289 e EBX=ponteiro para a estrutura de tags.
+    cmp eax, 0x36D76289
+    je .mb_ok
+    xor ebx, ebx          ; magic inválido: informa "sem info" ao kernel
+.mb_ok:
+    mov [multiboot2_info_addr], ebx
 
     ; Limpar tabelas de página
     mov edi, pml4_table
@@ -84,27 +94,19 @@ long_mode_start:
     mov gs, ax
     mov ss, ax
 
-    ; ---------------------------------------------------------
-    ; HABILITAR FPU E SSE COMPLETAMENTE
-    ; - CR0.EM = 0  : sem emulação de x87
-    ; - CR0.TS = 0  : sem "task switched" (se TS=1, FPU/SSE gera #NM)
-    ; - CR0.MP = 1  : monitor coprocessor
-    ; - CR0.OSFXSR = 1 : OS suporta FXSAVE/SSE (sem isso, XMM gera #UD)
-    ; - CR4.OSXMMEXCPT = 1 : exceções #XM de SSE
-    ; ---------------------------------------------------------
+    ; Habilitar FPU e SSE (ver Fase 2): EM=0, TS=0, MP=1, OSFXSR=1, OSXMMEXCPT=1
     mov rax, cr0
-    and rax, ~(1 << 2)   ; EM  = 0
-    and rax, ~(1 << 3)   ; TS  = 0
-    or  rax, (1 << 1)    ; MP  = 1
-    or  rax, (1 << 18)   ; OSFXSR = 1
+    and rax, ~(1 << 2)
+    and rax, ~(1 << 3)
+    or  rax, (1 << 1)
+    or  rax, (1 << 18)
     mov cr0, rax
 
     mov rax, cr4
-    or  rax, (1 << 10)   ; OSXMMEXCPT = 1
+    or  rax, (1 << 10)
     mov cr4, rax
 
-    fninit               ; Estado inicial sanado da x87
-    ; ---------------------------------------------------------
+    fninit
 
     ; Chamar o kernel C++
     call kernel_main

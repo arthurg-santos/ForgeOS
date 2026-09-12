@@ -3,6 +3,9 @@
 #include "idt.h"
 #include "pic.h"
 #include "serial.h"
+#include "pmm.h"
+
+extern "C" uint64_t multiboot2_info_addr;
 
 extern "C" void kernel_main() {
     Forge::Console::init();
@@ -10,7 +13,7 @@ extern "C" void kernel_main() {
     Forge::Interrupts::klog("kernel_main entered");
 
     Forge::Console::set_color(Forge::Console::LightGreen, Forge::Console::Black);
-    Forge::Console::println("ForgeOS v0.2 - Phase 2: CPU & Interrupts");
+    Forge::Console::println("ForgeOS v0.3 - Phase 3: Physical Memory");
     Forge::Console::set_color(Forge::Console::White, Forge::Console::Black);
 
     Forge::Console::println("Initializing GDT and TSS...");
@@ -26,8 +29,33 @@ extern "C" void kernel_main() {
     Forge::Console::println("IDT loaded successfully.");
 
     Forge::Console::println("Enabling hardware interrupts...");
-    Forge::Interrupts::klog("executing sti");
     __asm__ __volatile__("sti");
+
+    Forge::Console::println("Initializing Physical Memory Manager...");
+    Forge::Memory::pmm_init(multiboot2_info_addr);
+
+    Forge::Console::print("  Total usable RAM: ");
+    Forge::Console::print_dec(Forge::Memory::pmm_total_pages() * 4);
+    Forge::Console::println(" KiB");
+    Forge::Console::print("  Free RAM:         ");
+    Forge::Console::print_dec(Forge::Memory::pmm_free_pages() * 4);
+    Forge::Console::println(" KiB");
+
+    uint64_t page = Forge::Memory::pmm_alloc_page();
+    Forge::Console::print("  Allocated page:   ");
+    Forge::Console::print_hex(page);
+    Forge::Console::println("");
+
+    volatile uint64_t* probe = (volatile uint64_t*)page;
+    probe[0] = 0xDEADBEEFCAFEBABEULL;
+    bool probe_ok = (probe[0] == 0xDEADBEEFCAFEBABEULL);
+    Forge::Console::print("  Write/read test:  ");
+    Forge::Console::println(probe_ok ? "OK" : "FAILED");
+
+    Forge::Memory::pmm_free_page(page);
+    Forge::Console::print("  Free after release: ");
+    Forge::Console::print_dec(Forge::Memory::pmm_free_pages() * 4);
+    Forge::Console::println(" KiB");
 
     Forge::Console::println("\nSystem initialized. Triggering Breakpoint Exception (Int 3)...");
     __asm__ __volatile__("int $3");

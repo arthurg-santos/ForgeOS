@@ -4,11 +4,7 @@ CXX = g++
 ASM = nasm
 LD = gcc
 
-# Flags de compilação
-# -mno-mmx/-mno-sse/-mno-sse2/-mno-3dnow/-mno-80387: proíbem o GCC de emitir
-# instruções XMM/x87 no kernel. Isso elimina #UD/#NM por estado de FPU/SSE
-# em código gerado. A FPU/SSE continua sendo habilitada na CPU (entry.asm)
-# para uso futuro e para código da libgcc.
+# Flags de compilação (freestanding + sem XMM/x87 no código gerado)
 CFLAGS = -ffreestanding -fno-pie -fno-pic -mno-red-zone -mcmodel=kernel -nostdlib -fno-builtin -Wall -Wextra -O2 -g -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-80387
 CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti
 ASMFLAGS = -f elf64
@@ -22,13 +18,16 @@ ISO_NAME = $(BUILD_DIR)/forgeos.iso
 
 CXX_SOURCES = kernel/main.cpp kernel/io.cpp \
               arch/x86_64/gdt.cpp arch/x86_64/idt.cpp arch/x86_64/pic.cpp \
-              arch/x86_64/serial.cpp
+              arch/x86_64/serial.cpp memory/pmm.cpp
 ASM_SOURCES = boot/multiboot2_header.asm boot/entry.asm \
               arch/x86_64/interrupts.asm arch/x86_64/cpu_asm.asm
 
 CXX_OBJECTS = $(CXX_SOURCES:%.cpp=$(BUILD_DIR)/%.o)
 ASM_OBJECTS = $(ASM_SOURCES:%.asm=$(BUILD_DIR)/%.o)
 OBJECTS = $(CXX_OBJECTS) $(ASM_OBJECTS)
+
+# Caminhos de headers: include/ (genéricos), arch/x86_64/ (CPU), memory/ (PMM)
+INCLUDES = -Iinclude -Iarch/x86_64 -Imemory
 
 .PHONY: all clean run debug dirs
 
@@ -38,11 +37,12 @@ dirs:
 	@mkdir -p $(BUILD_DIR)/boot
 	@mkdir -p $(BUILD_DIR)/kernel
 	@mkdir -p $(BUILD_DIR)/arch/x86_64
+	@mkdir -p $(BUILD_DIR)/memory
 	@mkdir -p $(ISO_DIR)/boot/grub
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -Iinclude -Iarch/x86_64
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(INCLUDES)
 
 $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)
