@@ -25,9 +25,7 @@ namespace Forge {
             outb(PIC2_DATA, 0x01);
             io_wait();
 
-            // MÁSCARA TOTAL: nenhuma IRQ passa até que exista driver/handler
-            // para ela. Isso evita que o timer (IRQ0 -> vetor 32, gate nulo
-            // na IDT por enquanto) gere #GP assim que executarmos sti.
+            // MÁSCARA TOTAL: nenhuma IRQ passa até existir handler para ela.
             outb(PIC1_DATA, 0xFF);
             outb(PIC2_DATA, 0xFF);
         }
@@ -35,6 +33,20 @@ namespace Forge {
         void pic_send_eoi(uint8_t irq) {
             if (irq >= 8) outb(PIC2_COMMAND, 0x20);
             outb(PIC1_COMMAND, 0x20);
+        }
+
+        void pic_unmask(uint8_t irq) {
+            uint16_t port = (irq < 8) ? PIC1_DATA : PIC2_DATA;
+            uint8_t mask = inb(port);
+            mask &= (uint8_t)~(1 << (irq % 8));
+            outb(port, mask);
+        }
+
+        void pic_mask(uint8_t irq) {
+            uint16_t port = (irq < 8) ? PIC1_DATA : PIC2_DATA;
+            uint8_t mask = inb(port);
+            mask |= (uint8_t)(1 << (irq % 8));
+            outb(port, mask);
         }
     }
 }

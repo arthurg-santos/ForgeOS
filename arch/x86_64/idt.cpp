@@ -1,4 +1,3 @@
-// idt.cpp
 #include "idt.h"
 #include "io_ports.h"
 #include "io.h"
@@ -11,6 +10,10 @@ extern "C" void isr16(); extern "C" void isr17(); extern "C" void isr18(); exter
 extern "C" void isr20(); extern "C" void isr21(); extern "C" void isr22(); extern "C" void isr23();
 extern "C" void isr24(); extern "C" void isr25(); extern "C" void isr26(); extern "C" void isr27();
 extern "C" void isr28(); extern "C" void isr29(); extern "C" void isr30(); extern "C" void isr31();
+extern "C" void irq0(); extern "C" void irq1(); extern "C" void irq2(); extern "C" void irq3();
+extern "C" void irq4(); extern "C" void irq5(); extern "C" void irq6(); extern "C" void irq7();
+extern "C" void irq8(); extern "C" void irq9(); extern "C" void irq10(); extern "C" void irq11();
+extern "C" void irq12(); extern "C" void irq13(); extern "C" void irq14(); extern "C" void irq15();
 
 namespace Forge {
     namespace Interrupts {
@@ -45,39 +48,29 @@ namespace Forge {
             idt_ptr.limit = sizeof(idt) - 1;
             idt_ptr.base = (uint64_t)&idt;
 
-            // Preencher ISRs (Exceções da CPU)
-            idt_set_gate(0, (uint64_t)isr0, 0x08, 0x8E);
-            idt_set_gate(1, (uint64_t)isr1, 0x08, 0x8E);
-            idt_set_gate(2, (uint64_t)isr2, 0x08, 0x8E);
-            idt_set_gate(3, (uint64_t)isr3, 0x08, 0x8E);
-            idt_set_gate(4, (uint64_t)isr4, 0x08, 0x8E);
-            idt_set_gate(5, (uint64_t)isr5, 0x08, 0x8E);
-            idt_set_gate(6, (uint64_t)isr6, 0x08, 0x8E);
-            idt_set_gate(7, (uint64_t)isr7, 0x08, 0x8E);
-            idt_set_gate(8, (uint64_t)isr8, 0x08, 0x8E);
-            idt_set_gate(9, (uint64_t)isr9, 0x08, 0x8E);
-            idt_set_gate(10, (uint64_t)isr10, 0x08, 0x8E);
-            idt_set_gate(11, (uint64_t)isr11, 0x08, 0x8E);
-            idt_set_gate(12, (uint64_t)isr12, 0x08, 0x8E);
-            idt_set_gate(13, (uint64_t)isr13, 0x08, 0x8E);
-            idt_set_gate(14, (uint64_t)isr14, 0x08, 0x8E);
-            idt_set_gate(15, (uint64_t)isr15, 0x08, 0x8E);
-            idt_set_gate(16, (uint64_t)isr16, 0x08, 0x8E);
-            idt_set_gate(17, (uint64_t)isr17, 0x08, 0x8E);
-            idt_set_gate(18, (uint64_t)isr18, 0x08, 0x8E);
-            idt_set_gate(19, (uint64_t)isr19, 0x08, 0x8E);
-            idt_set_gate(20, (uint64_t)isr20, 0x08, 0x8E);
-            idt_set_gate(21, (uint64_t)isr21, 0x08, 0x8E);
-            idt_set_gate(22, (uint64_t)isr22, 0x08, 0x8E);
-            idt_set_gate(23, (uint64_t)isr23, 0x08, 0x8E);
-            idt_set_gate(24, (uint64_t)isr24, 0x08, 0x8E);
-            idt_set_gate(25, (uint64_t)isr25, 0x08, 0x8E);
-            idt_set_gate(26, (uint64_t)isr26, 0x08, 0x8E);
-            idt_set_gate(27, (uint64_t)isr27, 0x08, 0x8E);
-            idt_set_gate(28, (uint64_t)isr28, 0x08, 0x8E);
-            idt_set_gate(29, (uint64_t)isr29, 0x08, 0x8E);
-            idt_set_gate(30, (uint64_t)isr30, 0x08, 0x8E);
-            idt_set_gate(31, (uint64_t)isr31, 0x08, 0x8E);
+            uint64_t isr_handlers[32] = {
+                (uint64_t)isr0,  (uint64_t)isr1,  (uint64_t)isr2,  (uint64_t)isr3,
+                (uint64_t)isr4,  (uint64_t)isr5,  (uint64_t)isr6,  (uint64_t)isr7,
+                (uint64_t)isr8,  (uint64_t)isr9,  (uint64_t)isr10, (uint64_t)isr11,
+                (uint64_t)isr12, (uint64_t)isr13, (uint64_t)isr14, (uint64_t)isr15,
+                (uint64_t)isr16, (uint64_t)isr17, (uint64_t)isr18, (uint64_t)isr19,
+                (uint64_t)isr20, (uint64_t)isr21, (uint64_t)isr22, (uint64_t)isr23,
+                (uint64_t)isr24, (uint64_t)isr25, (uint64_t)isr26, (uint64_t)isr27,
+                (uint64_t)isr28, (uint64_t)isr29, (uint64_t)isr30, (uint64_t)isr31
+            };
+            uint64_t irq_handlers[16] = {
+                (uint64_t)irq0,  (uint64_t)irq1,  (uint64_t)irq2,  (uint64_t)irq3,
+                (uint64_t)irq4,  (uint64_t)irq5,  (uint64_t)irq6,  (uint64_t)irq7,
+                (uint64_t)irq8,  (uint64_t)irq9,  (uint64_t)irq10, (uint64_t)irq11,
+                (uint64_t)irq12, (uint64_t)irq13, (uint64_t)irq14, (uint64_t)irq15
+            };
+
+            for (int i = 0; i < 32; i++) {
+                idt_set_gate((uint8_t)i, isr_handlers[i], 0x08, 0x8E);
+            }
+            for (int i = 0; i < 16; i++) {
+                idt_set_gate((uint8_t)(32 + i), irq_handlers[i], 0x08, 0x8E);
+            }
 
             __asm__ __volatile__("lidt %0" : : "m"(idt_ptr));
         }
