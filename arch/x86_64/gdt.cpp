@@ -46,7 +46,7 @@ namespace Forge {
         } __attribute__((packed));
 
         TSS tss __attribute__((aligned(16)));
-        GDTEntry gdt[5];
+        GDTEntry gdt[7];
 
         struct {
             uint16_t limit;
@@ -54,24 +54,24 @@ namespace Forge {
         } __attribute__((packed)) gdt_ptr;
 
         void gdt_init() {
-            Interrupts::klog_hex("gdt: &tss", (uint64_t)&tss);
-            Interrupts::klog_hex("gdt: &gdt", (uint64_t)&gdt);
-
             Interrupts::klog("gdt: zeroing TSS");
+
             for (size_t i = 0; i < sizeof(TSS); i++) {
                 ((uint8_t*)&tss)[i] = 0;
             }
             tss.iomap_base = sizeof(TSS);
-            Interrupts::klog("gdt: TSS zeroed OK");
 
             uint64_t tss_base = (uint64_t)&tss;
             uint32_t tss_limit = sizeof(TSS) - 1;
 
             Interrupts::klog("gdt: filling descriptors");
 
-            gdt[0] = {0, 0, 0, 0, 0, 0};
-            gdt[1] = {0, 0, 0, 0x9A, 0x20, 0}; // Kernel Code 0x08
-            gdt[2] = {0, 0, 0, 0x92, 0x00, 0}; // Kernel Data 0x10
+            gdt[0] = {0, 0, 0, 0x00, 0x00, 0}; // Null
+            gdt[1] = {0, 0, 0, 0x9A, 0x20, 0}; // Kernel Code  0x08
+            gdt[2] = {0, 0, 0, 0x92, 0x00, 0}; // Kernel Data  0x10
+            // gdt[3..4] = TSS (0x18), preenchido abaixo
+            gdt[5] = {0, 0, 0, 0xFA, 0x20, 0}; // User Code  0x28 (DPL=3)
+            gdt[6] = {0, 0, 0, 0xF2, 0x00, 0}; // User Data  0x30 (DPL=3)
 
             TSSEntry* tss_entry = (TSSEntry*)&gdt[3];
             tss_entry->length = tss_limit;
@@ -83,7 +83,7 @@ namespace Forge {
             tss_entry->base_upper = (tss_base >> 32) & 0xFFFFFFFF;
             tss_entry->reserved = 0;
 
-            gdt_ptr.limit = (sizeof(GDTEntry) * 5) - 1;
+            gdt_ptr.limit = (sizeof(GDTEntry) * 7) - 1;
             gdt_ptr.base = (uint64_t)&gdt;
 
             Interrupts::klog("gdt: calling gdt_flush (lgdt+reload)");
@@ -92,6 +92,10 @@ namespace Forge {
 
             tss_flush(0x18);
             Interrupts::klog("gdt: tss_flush (ltr) OK");
+        }
+
+        void set_tss_rsp0(uint64_t rsp0) {
+            tss.rsp0 = rsp0;
         }
     }
 }

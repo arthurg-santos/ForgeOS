@@ -7,6 +7,7 @@ namespace Forge {
     namespace Kernel {
         void scheduler_init();
         int task_create(void (*entry)());
+        int task_create_user(void (*user_entry)());
         void schedule();
         void yield();
         void task_exit();

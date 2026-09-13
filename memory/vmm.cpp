@@ -9,6 +9,7 @@ namespace Forge {
 
             constexpr uint64_t PRESENT   = 1ULL << 0;
             constexpr uint64_t WRITABLE  = 1ULL << 1;
+            constexpr uint64_t USER      = 1ULL << 2;
             constexpr uint64_t HUGE      = 1ULL << 7;
             constexpr uint64_t ADDR_MASK = 0x00007FFFFFFFF000ULL;
 
@@ -41,18 +42,19 @@ namespace Forge {
                 return;
             }
 
-            // Identity map do primeiro 1 GiB com páginas de 2 MiB (huge pages),
-            // replicando o mapa do boot, mas agora sob gestão do VMM/PMM.
+            // Identity map do primeiro 1 GiB com huge pages de 2 MiB.
+            // FASE 6: bit USER ativado neste ramo para permitir o primeiro
+            // código em ring 3 (stacks e código de usuário vivem aqui).
+            // O ramo higher-half (heap do kernel) permanece kernel-only.
             uint64_t* pdpt = alloc_table();
             uint64_t* pd   = alloc_table();
             for (int i = 0; i < 512; i++) {
-                pd[i] = ((uint64_t)i * 0x200000ULL) | PRESENT | WRITABLE | HUGE;
+                pd[i] = ((uint64_t)i * 0x200000ULL) | PRESENT | WRITABLE | HUGE | USER;
             }
-            pdpt[0] = (uint64_t)pd | PRESENT | WRITABLE;
-            pml4[0] = (uint64_t)pdpt | PRESENT | WRITABLE;
+            pdpt[0] = (uint64_t)pd | PRESENT | WRITABLE | USER;
+            pml4[0] = (uint64_t)pdpt | PRESENT | WRITABLE | USER;
 
-            // Higher-half (PML4[256] -> VA 0xFFFF800000000000+) para o heap
-            // do kernel. PD/PT desse ramo são alocados sob demanda no map.
+            // Higher-half (PML4[256] -> VA 0xFFFF800000000000+), kernel-only
             uint64_t* pdpt_high = alloc_table();
             pml4[256] = (uint64_t)pdpt_high | PRESENT | WRITABLE;
 

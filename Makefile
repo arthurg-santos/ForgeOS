@@ -17,9 +17,10 @@ KERNEL_ELF = $(BUILD_DIR)/forgeos.elf
 ISO_NAME = $(BUILD_DIR)/forgeos.iso
 
 CXX_SOURCES = kernel/main.cpp kernel/io.cpp kernel/irq.cpp kernel/scheduler.cpp \
+              kernel/syscall.cpp \
               arch/x86_64/gdt.cpp arch/x86_64/idt.cpp arch/x86_64/pic.cpp \
               arch/x86_64/serial.cpp memory/pmm.cpp memory/vmm.cpp memory/kheap.cpp \
-              drivers/timer.cpp
+              drivers/timer.cpp user/user_program.cpp
 ASM_SOURCES = boot/multiboot2_header.asm boot/entry.asm \
               arch/x86_64/interrupts.asm arch/x86_64/cpu_asm.asm \
               arch/x86_64/context.asm
@@ -29,7 +30,7 @@ ASM_OBJECTS = $(ASM_SOURCES:%.asm=$(BUILD_DIR)/%.o)
 OBJECTS = $(CXX_OBJECTS) $(ASM_OBJECTS)
 
 # Caminhos de headers
-INCLUDES = -Iinclude -Iarch/x86_64 -Imemory -Ikernel -Idrivers
+INCLUDES = -Iinclude -Iarch/x86_64 -Imemory -Ikernel -Idrivers -Iuser
 
 .PHONY: all clean run debug dirs
 
@@ -41,6 +42,7 @@ dirs:
 	@mkdir -p $(BUILD_DIR)/arch/x86_64
 	@mkdir -p $(BUILD_DIR)/memory
 	@mkdir -p $(BUILD_DIR)/drivers
+	@mkdir -p $(BUILD_DIR)/user
 	@mkdir -p $(ISO_DIR)/boot/grub
 
 $(BUILD_DIR)/%.o: %.cpp

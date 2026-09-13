@@ -6,6 +6,7 @@
 namespace Forge {
     namespace CPU {
         void gdt_init();
+        void set_tss_rsp0(uint64_t rsp0);
     }
 }
 

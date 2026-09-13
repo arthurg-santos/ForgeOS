@@ -1,5 +1,6 @@
 global _start
 global multiboot2_info_addr
+global stack_top
 extern kernel_main
 
 section .bss
@@ -17,10 +18,9 @@ _start:
     mov esp, stack_top
 
     ; Salvar o ponteiro do Multiboot2 info (EBX) e validar o magic (EAX).
-    ; O GRUB entrega EAX=0x36D76289 e EBX=ponteiro para a estrutura de tags.
     cmp eax, 0x36D76289
     je .mb_ok
-    xor ebx, ebx          ; magic inválido: informa "sem info" ao kernel
+    xor ebx, ebx
 .mb_ok:
     mov [multiboot2_info_addr], ebx
 
@@ -94,7 +94,7 @@ long_mode_start:
     mov gs, ax
     mov ss, ax
 
-    ; Habilitar FPU e SSE (ver Fase 2): EM=0, TS=0, MP=1, OSFXSR=1, OSXMMEXCPT=1
+    ; Habilitar FPU e SSE: EM=0, TS=0, MP=1, OSFXSR=1, OSXMMEXCPT=1
     mov rax, cr0
     and rax, ~(1 << 2)
     and rax, ~(1 << 3)
@@ -121,9 +121,9 @@ section .rodata
 gdt64:
     dq 0 ; Entrada nula
 .code_segment: equ $ - gdt64
-    dq (1<<53) | (1<<47) | (1<<44) | (1<<43) | (1<<41) ; Segmento de Código 64-bit
+    dq (1<<53) | (1<<47) | (1<<44) | (1<<43) | (1<<41) ; Kernel Code 0x08
 .data_segment: equ $ - gdt64
-    dq (1<<47) | (1<<44) | (1<<41) ; Segmento de Dados
+    dq (1<<47) | (1<<44) | (1<<41) ; Kernel Data 0x10
 .pointer:
     dw $ - gdt64 - 1
     dq gdt64

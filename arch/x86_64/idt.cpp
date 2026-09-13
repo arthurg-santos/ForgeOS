@@ -1,6 +1,7 @@
 #include "idt.h"
 #include "io_ports.h"
 #include "io.h"
+#include "syscall.h"
 
 extern "C" void isr0(); extern "C" void isr1(); extern "C" void isr2(); extern "C" void isr3();
 extern "C" void isr4(); extern "C" void isr5(); extern "C" void isr6(); extern "C" void isr7();
@@ -10,6 +11,7 @@ extern "C" void isr16(); extern "C" void isr17(); extern "C" void isr18(); exter
 extern "C" void isr20(); extern "C" void isr21(); extern "C" void isr22(); extern "C" void isr23();
 extern "C" void isr24(); extern "C" void isr25(); extern "C" void isr26(); extern "C" void isr27();
 extern "C" void isr28(); extern "C" void isr29(); extern "C" void isr30(); extern "C" void isr31();
+extern "C" void isr128();
 extern "C" void irq0(); extern "C" void irq1(); extern "C" void irq2(); extern "C" void irq3();
 extern "C" void irq4(); extern "C" void irq5(); extern "C" void irq6(); extern "C" void irq7();
 extern "C" void irq8(); extern "C" void irq9(); extern "C" void irq10(); extern "C" void irq11();
@@ -72,6 +74,9 @@ namespace Forge {
                 idt_set_gate((uint8_t)(32 + i), irq_handlers[i], 0x08, 0x8E);
             }
 
+            // Syscall gate: DPL=3 (0x60) para que ring 3 possa usar int 0x80
+            idt_set_gate(0x80, (uint64_t)isr128, 0x08, 0xEE);
+
             __asm__ __volatile__("lidt %0" : : "m"(idt_ptr));
         }
 
@@ -86,6 +91,12 @@ namespace Forge {
         };
 
         extern "C" void fault_handler(InterruptFrame* frame) {
+            // int 0x80: syscall vinda de qualquer ring
+            if (frame->int_no == 0x80) {
+                Syscall::syscall_handler(frame);
+                return;
+            }
+
             if (frame->int_no < 32) {
                 Console::set_color(Console::White, Console::Red);
                 Console::print("\nKERNEL PANIC: ");
