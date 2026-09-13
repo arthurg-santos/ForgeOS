@@ -18,7 +18,7 @@ ISO_NAME = $(BUILD_DIR)/forgeos.iso
 
 CXX_SOURCES = kernel/main.cpp kernel/io.cpp \
               arch/x86_64/gdt.cpp arch/x86_64/idt.cpp arch/x86_64/pic.cpp \
-              arch/x86_64/serial.cpp memory/pmm.cpp
+              arch/x86_64/serial.cpp memory/pmm.cpp memory/vmm.cpp memory/kheap.cpp
 ASM_SOURCES = boot/multiboot2_header.asm boot/entry.asm \
               arch/x86_64/interrupts.asm arch/x86_64/cpu_asm.asm
 
@@ -26,7 +26,7 @@ CXX_OBJECTS = $(CXX_SOURCES:%.cpp=$(BUILD_DIR)/%.o)
 ASM_OBJECTS = $(ASM_SOURCES:%.asm=$(BUILD_DIR)/%.o)
 OBJECTS = $(CXX_OBJECTS) $(ASM_OBJECTS)
 
-# Caminhos de headers: include/ (genéricos), arch/x86_64/ (CPU), memory/ (PMM)
+# Caminhos de headers: include/ (genéricos), arch/x86_64/ (CPU), memory/ (memória)
 INCLUDES = -Iinclude -Iarch/x86_64 -Imemory
 
 .PHONY: all clean run debug dirs

@@ -34,6 +34,19 @@ namespace Forge {
             terminal_column = 0;
         }
 
+        // Rola a tela uma linha para cima (preserva histórico),
+        // em vez de apagar tudo quando o texto ultrapassa o fim.
+        void scroll_up() {
+            for (size_t y = 0; y < VGA_HEIGHT - 1; y++) {
+                for (size_t x = 0; x < VGA_WIDTH; x++) {
+                    vga_buffer[y * VGA_WIDTH + x] = vga_buffer[(y + 1) * VGA_WIDTH + x];
+                }
+            }
+            for (size_t x = 0; x < VGA_WIDTH; x++) {
+                vga_buffer[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = vga_entry(' ', terminal_color);
+            }
+        }
+
         void set_color(Color fg, Color bg) {
             terminal_color = fg | (bg << 4);
         }
@@ -43,8 +56,8 @@ namespace Forge {
                 terminal_row++;
                 terminal_column = 0;
                 if (terminal_row >= VGA_HEIGHT) {
-                    terminal_row = 0;
-                    clear();
+                    terminal_row = VGA_HEIGHT - 1;
+                    scroll_up();
                 }
                 return;
             }
@@ -53,8 +66,8 @@ namespace Forge {
                 terminal_column = 0;
                 terminal_row++;
                 if (terminal_row >= VGA_HEIGHT) {
-                    terminal_row = 0;
-                    clear();
+                    terminal_row = VGA_HEIGHT - 1;
+                    scroll_up();
                 }
             }
 
