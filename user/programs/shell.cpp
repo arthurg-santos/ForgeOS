@@ -5,13 +5,13 @@ namespace {
     constexpr int HIST_MAX = 16;
 
     char line[LINE_MAX];
-    int len = 0;          // comprimento atual
-    int cur = 0;          // posição do cursor dentro da linha
+    int len = 0;
+    int cur = 0;
 
     char hist[HIST_MAX][LINE_MAX];
     int hist_count = 0;
-    int hist_view = -1;   // índice sendo navegado (-1 = linha nova)
-    char draft[LINE_MAX]; // rascunho da linha nova durante a navegação
+    int hist_view = -1;
+    char draft[LINE_MAX];
 
     bool streq(const char* a, const char* b) {
         while (*a && *a == *b) { a++; b++; }
@@ -21,6 +21,13 @@ namespace {
     bool starts_with(const char* s, const char* p) {
         while (*p) { if (*s != *p) return false; s++; p++; }
         return true;
+    }
+
+    // Retorna ponteiro para o primeiro espaço após p, ou NULL.
+    const char* skip_word(const char* s) {
+        while (*s && *s != ' ') s++;
+        while (*s == ' ') s++;
+        return (*s == '\0') ? nullptr : s;
     }
 
     void cat(char* dst, const char* src) {
@@ -53,8 +60,6 @@ namespace {
     void move_left(int n)  { for (int i = 0; i < n; i++) con_left(); }
     void move_right(int n) { for (int i = 0; i < n; i++) con_right(); }
 
-    // ---------- editor de linha ----------
-
     void ed_insert(char c) {
         if (len >= LINE_MAX - 1) return;
         for (int i = len; i > cur; i--) line[i] = line[i - 1];
@@ -64,8 +69,8 @@ namespace {
         int t = 0;
         for (int i = cur; i < len; i++) tmp[t++] = line[i];
         tmp[t] = '\0';
-        sys_write(tmp);                 // imprime o char + a cauda
-        move_left(len - (cur + 1));     // reposiciona o cursor
+        sys_write(tmp);
+        move_left(len - (cur + 1));
         cur++;
     }
 
@@ -80,8 +85,8 @@ namespace {
         for (int i = cur; i < len; i++) tmp[t++] = line[i];
         tmp[t] = '\0';
         sys_write(tmp);
-        sys_write(" ");                 // apaga a sobra no fim
-        move_left(len - cur + 1);       // cursor de volta ao ponto de edição
+        sys_write(" ");
+        move_left(len - cur + 1);
     }
 
     void ed_delete() {
@@ -102,7 +107,6 @@ namespace {
     void ed_home()  { move_left(cur); cur = 0; }
     void ed_end()   { move_right(len - cur); cur = len; }
 
-    // Substitui a linha inteira na tela (usado pelo histórico)
     void set_line_from(const char* s) {
         int oldlen = len;
         move_left(cur);
@@ -112,8 +116,8 @@ namespace {
         len = n;
         cur = n;
         sys_write(line);
-        for (int i = n; i < oldlen; i++) sys_write(" "); // apaga sobra
-        move_left(oldlen - n);                           // cursor no fim novo
+        for (int i = n; i < oldlen; i++) sys_write(" ");
+        move_left(oldlen - n);
     }
 
     void ed_up() {
@@ -150,8 +154,6 @@ namespace {
                     continue;
             }
         }
-        // Termina a string ANTES de salvar/despachar: sem isso, sobras do
-        // comando anterior permanecem invisíveis no buffer (bug "clearfetch").
         line[len] = '\0';
         if (len > 0) {
             if (hist_count == HIST_MAX) {
@@ -168,16 +170,19 @@ namespace {
 
     void cmd_help() {
         sys_write("fsh commands:\n");
-        sys_write("  help        esta ajuda\n");
-        sys_write("  echo <txt>  imprime texto\n");
-        sys_write("  ps          lista processos\n");
-        sys_write("  mem         memoria fisica e heap\n");
-        sys_write("  uptime      tempo de atividade\n");
-        sys_write("  clear       limpa a tela\n");
-        sys_write("  forgefetch  sistema em estilo fastfetch\n");
-        sys_write("  exit        encerra o shell\n");
-        sys_write("edicao: setas cima/baixo = historico; esq/dir, home, end,\n");
-        sys_write("        backspace e delete editam a linha atual\n");
+        sys_write("  help                esta ajuda\n");
+        sys_write("  echo <txt>          imprime texto\n");
+        sys_write("  ps                  lista processos\n");
+        sys_write("  mem                 memoria fisica e heap\n");
+        sys_write("  uptime              tempo de atividade\n");
+        sys_write("  clear               limpa a tela\n");
+        sys_write("  forgefetch          sistema em estilo fastfetch\n");
+        sys_write("  exit                encerra o shell\n");
+        sys_write("  ls                  lista arquivos no ramdisk\n");
+        sys_write("  touch <arquivo>     cria um arquivo vazio\n");
+        sys_write("  write <arq> <texto> escreve texto no arquivo\n");
+        sys_write("  cat <arquivo>       imprime conteudo do arquivo\n");
+        sys_write("  rm <arquivo>        remove arquivo\n");
     }
 
     void cmd_mem() {
@@ -209,6 +214,62 @@ namespace {
         }
     }
 
+    void cmd_ls() {
+        char buf[2048];
+        int n = sys_ls(buf, sizeof(buf));
+        if (n < 0) { sys_write("ls: erro\n"); return; }
+        if (n == 0) { sys_write("  (ramdisk vazio)\n"); return; }
+        sys_write(buf);
+    }
+
+    void cmd_touch(const char* arg) {
+        if (!arg) { sys_write("uso: touch <nome>\n"); return; }
+        int fd = sys_open(arg, O_WRONLY | O_CREATE);
+        if (fd < 0) { sys_write("touch: falha\n"); return; }
+        sys_close(fd);
+    }
+
+    void cmd_write(const char* arg) {
+        if (!arg) { sys_write("uso: write <arquivo> <texto>\n"); return; }
+        const char* rest = skip_word(arg);
+        if (!rest) { sys_write("uso: write <arquivo> <texto>\n"); return; }
+
+        char name[32];
+        int i = 0;
+        while (arg[i] && arg[i] != ' ' && i < 31) { name[i] = arg[i]; i++; }
+        name[i] = '\0';
+
+        int fd = sys_open(name, O_WRONLY | O_CREATE);
+        if (fd < 0) { sys_write("write: nao foi possivel abrir\n"); return; }
+
+        int n = 0;
+        while (rest[n]) n++;
+        sys_fwrite(fd, (const uint8_t*)rest, (uint32_t)n);
+        sys_close(fd);
+    }
+
+    void cmd_cat(const char* arg) {
+        if (!arg) { sys_write("uso: cat <arquivo>\n"); return; }
+        int fd = sys_open(arg, O_RDONLY);
+        if (fd < 0) { sys_write("cat: arquivo nao existe\n"); return; }
+        uint8_t buf[512];
+        while (true) {
+            int got = sys_read(fd, buf, sizeof(buf));
+            if (got <= 0) break;
+            char tmp[513];
+            for (int i = 0; i < got; i++) tmp[i] = (char)buf[i];
+            tmp[got] = '\0';
+            sys_write(tmp);
+        }
+        sys_close(fd);
+        sys_write("\n");
+    }
+
+    void cmd_rm(const char* arg) {
+        if (!arg) { sys_write("uso: rm <arquivo>\n"); return; }
+        if (sys_rm(arg) < 0) sys_write("rm: arquivo nao existe\n");
+    }
+
     const char* LOGO[6] = {
         "  _____",
         " |  ___|__  _ __ __ _  ___",
@@ -226,7 +287,7 @@ namespace {
         l0[0] = l2[0] = l4[0] = l7[0] = l8[0] = '\0';
 
         cat(l0, "user@forgeos");
-        cat(l2, "OS: ForgeOS v0.8 (x86_64, ring 3)");
+        cat(l2, "OS: ForgeOS v0.9 (x86_64, ring 3)");
         cat(l4, "Uptime: ");
         num_into(l4, si.ticks / 100);
         cat(l4, "s");
@@ -237,15 +298,15 @@ namespace {
         cat(l7, " KiB");
         cat(l8, "Procs: ");
         num_into(l8, si.tasks);
-        cat(l8, " | TTY: 80x25 VGA text");
+        cat(l8, " | FS: ramdisk");
 
         const char* info[10] = {
             l0,
             "------------------------------------",
             l2,
-            "Kernel: forge-0.8 (phase 8: tty+fsh)",
+            "Kernel: forge-0.9 (phase 9: vfs)",
             l4,
-            "Shell: fsh 1.0",
+            "Shell: fsh 1.1",
             "CPU: x86_64 Long Mode @ PIT 100Hz",
             l7,
             l8,
@@ -280,7 +341,12 @@ namespace {
         if (streq(cmd, "mem"))          { cmd_mem(); return; }
         if (streq(cmd, "uptime"))       { cmd_uptime(); return; }
         if (streq(cmd, "forgefetch"))   { cmd_forgefetch(); return; }
+        if (streq(cmd, "ls"))           { cmd_ls(); return; }
         if (streq(cmd, "exit"))         { sys_exit(); return; }
+        if (starts_with(cmd, "touch ")) { cmd_touch(skip_word(cmd)); return; }
+        if (starts_with(cmd, "write ")) { cmd_write(skip_word(cmd)); return; }
+        if (starts_with(cmd, "cat "))   { cmd_cat(skip_word(cmd)); return; }
+        if (starts_with(cmd, "rm "))    { cmd_rm(skip_word(cmd)); return; }
         if (starts_with(cmd, "echo "))  { sys_write(cmd + 5); sys_write("\n"); return; }
         sys_write("fsh: command not found: ");
         sys_write(cmd);
@@ -290,7 +356,7 @@ namespace {
 
 extern "C" void _start() {
     sys_setcolor(COL_LGREY, COL_BLACK);
-    sys_write("ForgeOS shell (fsh 1.0) - digite 'help' ou 'forgefetch'\n");
+    sys_write("ForgeOS shell (fsh 1.1) - digite 'help' ou 'forgefetch'\n");
 
     while (true) {
         sys_setcolor(COL_LGREEN, COL_BLACK);

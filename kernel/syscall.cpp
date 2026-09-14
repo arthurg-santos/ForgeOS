@@ -6,6 +6,7 @@
 #include "kheap.h"
 #include "pmm.h"
 #include "sysinfo.h"
+#include "vfs.h"
 
 namespace Forge {
     namespace Syscall {
@@ -24,11 +25,12 @@ namespace Forge {
             }
         }
 
-        // ABI: rax = número, rdi = arg0, rsi = arg1. Retorno em rax (via frame).
+        // ABI: rax = número, rdi = arg0, rsi = arg1, rdx = arg2. Retorno em rax.
         void syscall_handler(Interrupts::InterruptFrame* frame) {
             uint64_t num = frame->rax;
             uint64_t a0  = frame->rdi;
             uint64_t a1  = frame->rsi;
+            uint64_t a2  = frame->rdx;
             uint64_t ret = 0;
 
             switch (num) {
@@ -46,7 +48,7 @@ namespace Forge {
                     Kernel::yield();
                     break;
                 case SYS_EXIT:
-                    Kernel::task_exit(); // não retorna
+                    Kernel::task_exit();
                     break;
                 case SYS_READLINE: {
                     char* ub = (char*)a0;
@@ -60,7 +62,7 @@ namespace Forge {
                             if (len > 0) { len--; Console::put_char('\b'); }
                             continue;
                         }
-                        if (c >= 1 && c <= 7) continue; // teclas de edição: ignoradas aqui
+                        if (c >= 1 && c <= 7) continue;
                         if (len + 1 < max) {
                             ub[len++] = (char)c;
                             Console::put_char((char)c);
@@ -103,8 +105,39 @@ namespace Forge {
                     Console::set_color((Console::Color)a0, (Console::Color)a1);
                     break;
                 case SYS_GETCHAR:
-                    // Não-bloqueante: -1 se não houver tecla no buffer
                     ret = (uint64_t)(int64_t)Drivers::keyboard_get_char();
+                    break;
+                case SYS_OPEN: {
+                    const char* name = (const char*)a0;
+                    int flags = (int)a1;
+                    ret = (uint64_t)(int64_t)VFS::vfs_open(name, flags);
+                    break;
+                }
+                case SYS_READ: {
+                    int fd = (int)a0;
+                    uint8_t* buf = (uint8_t*)a1;
+                    uint32_t n = (uint32_t)a2;
+                    ret = (uint64_t)(int64_t)VFS::vfs_read(fd, buf, n);
+                    break;
+                }
+                case SYS_FWRITE: {
+                    int fd = (int)a0;
+                    const uint8_t* buf = (const uint8_t*)a1;
+                    uint32_t n = (uint32_t)a2;
+                    ret = (uint64_t)(int64_t)VFS::vfs_write(fd, buf, n);
+                    break;
+                }
+                case SYS_CLOSE:
+                    ret = (uint64_t)(int64_t)VFS::vfs_close((int)a0);
+                    break;
+                case SYS_LS: {
+                    char* buf = (char*)a0;
+                    uint32_t maxlen = (uint32_t)a1;
+                    ret = (uint64_t)VFS::vfs_ls(buf, maxlen);
+                    break;
+                }
+                case SYS_RM:
+                    ret = (uint64_t)(int64_t)VFS::vfs_rm((const char*)a0);
                     break;
                 default:
                     ret = (uint64_t)-1;
