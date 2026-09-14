@@ -20,6 +20,7 @@ constexpr uint64_t SYS_CLOSE    = 12;
 constexpr uint64_t SYS_LS       = 13;
 constexpr uint64_t SYS_RM       = 14;
 constexpr uint64_t SYS_FWRITE   = 15;
+constexpr uint64_t SYS_GUI      = 16;
 
 constexpr uint64_t COL_BLACK = 0, COL_BLUE = 1, COL_GREEN = 2, COL_CYAN = 3;
 constexpr uint64_t COL_RED = 4, COL_MAGENTA = 5, COL_BROWN = 6, COL_LGREY = 7;
@@ -29,7 +30,6 @@ constexpr uint64_t COL_LRED = 12, COL_LMAGENTA = 13, COL_LBROWN = 14, COL_WHITE 
 constexpr int KEY_UP = 1, KEY_DOWN = 2, KEY_LEFT = 3, KEY_RIGHT = 4;
 constexpr int KEY_HOME = 5, KEY_END = 6, KEY_DELETE = 7;
 
-// Flags de open (espelham Forge::VFS)
 constexpr int O_RDONLY = 0;
 constexpr int O_WRONLY = 1;
 constexpr int O_RDWR   = 2;
@@ -82,6 +82,7 @@ inline int sys_fwrite(int fd, const uint8_t* buf, uint32_t n) { return (int)sysc
 inline int sys_close(int fd) { return (int)syscall1(SYS_CLOSE, (uint64_t)fd); }
 inline int sys_ls(char* buf, uint32_t maxlen) { return (int)syscall2(SYS_LS, (uint64_t)buf, maxlen); }
 inline int sys_rm(const char* name) { return (int)syscall1(SYS_RM, (uint64_t)name); }
+inline void sys_gui() { syscall1(SYS_GUI, 0); }
 
 inline void con_left()  { sys_write("\x01"); }
 inline void con_right() { sys_write("\x02"); }

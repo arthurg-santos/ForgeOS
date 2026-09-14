@@ -23,7 +23,7 @@ extern "C" void kernel_main() {
     Forge::Interrupts::klog("kernel_main entered");
 
     Forge::Console::set_color(Forge::Console::LightGreen, Forge::Console::Black);
-    Forge::Console::println("ForgeOS v0.9 - Phase 9: VFS + Ramdisk");
+    Forge::Console::println("ForgeOS v0.10 - Phase 10: GUI");
     Forge::Console::set_color(Forge::Console::White, Forge::Console::Black);
 
     Forge::Console::println("Initializing GDT and TSS...");
@@ -47,10 +47,8 @@ extern "C" void kernel_main() {
     Forge::Console::println("Initializing kernel heap (kmalloc)...");
     Forge::Memory::kheap_init();
 
-    Forge::Console::println("Initializing Ramdisk (32 files x 4 KiB)...");
+    Forge::Console::println("Initializing Ramdisk + VFS...");
     Forge::Storage::ramdisk_init();
-
-    Forge::Console::println("Initializing VFS (16 FDs)...");
     Forge::VFS::vfs_init();
 
     Forge::Console::println("Initializing Scheduler + Timer (100 Hz)...");
@@ -66,7 +64,7 @@ extern "C" void kernel_main() {
     Forge::Console::println(" bytes)...");
     Forge::Kernel::process_create(_binary_shell_elf_start, elf_size, "shell");
 
-    Forge::Console::println("Handing over to userland. Have fun.");
+    Forge::Console::println("Type 'gui' in the shell for graphics mode. ESC returns.");
     Forge::Console::println("");
 
     while (true) {

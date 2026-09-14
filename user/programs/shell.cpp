@@ -23,7 +23,6 @@ namespace {
         return true;
     }
 
-    // Retorna ponteiro para o primeiro espaço após p, ou NULL.
     const char* skip_word(const char* s) {
         while (*s && *s != ' ') s++;
         while (*s == ' ') s++;
@@ -59,6 +58,8 @@ namespace {
 
     void move_left(int n)  { for (int i = 0; i < n; i++) con_left(); }
     void move_right(int n) { for (int i = 0; i < n; i++) con_right(); }
+
+    // ---------- editor de linha ----------
 
     void ed_insert(char c) {
         if (len >= LINE_MAX - 1) return;
@@ -177,12 +178,9 @@ namespace {
         sys_write("  uptime              tempo de atividade\n");
         sys_write("  clear               limpa a tela\n");
         sys_write("  forgefetch          sistema em estilo fastfetch\n");
+        sys_write("  gui                 entra no modo grafico (ESC volta)\n");
         sys_write("  exit                encerra o shell\n");
-        sys_write("  ls                  lista arquivos no ramdisk\n");
-        sys_write("  touch <arquivo>     cria um arquivo vazio\n");
-        sys_write("  write <arq> <texto> escreve texto no arquivo\n");
-        sys_write("  cat <arquivo>       imprime conteudo do arquivo\n");
-        sys_write("  rm <arquivo>        remove arquivo\n");
+        sys_write("  ls / touch / write / cat / rm   arquivos no ramdisk\n");
     }
 
     void cmd_mem() {
@@ -233,15 +231,12 @@ namespace {
         if (!arg) { sys_write("uso: write <arquivo> <texto>\n"); return; }
         const char* rest = skip_word(arg);
         if (!rest) { sys_write("uso: write <arquivo> <texto>\n"); return; }
-
         char name[32];
         int i = 0;
         while (arg[i] && arg[i] != ' ' && i < 31) { name[i] = arg[i]; i++; }
         name[i] = '\0';
-
         int fd = sys_open(name, O_WRONLY | O_CREATE);
         if (fd < 0) { sys_write("write: nao foi possivel abrir\n"); return; }
-
         int n = 0;
         while (rest[n]) n++;
         sys_fwrite(fd, (const uint8_t*)rest, (uint32_t)n);
@@ -287,7 +282,7 @@ namespace {
         l0[0] = l2[0] = l4[0] = l7[0] = l8[0] = '\0';
 
         cat(l0, "user@forgeos");
-        cat(l2, "OS: ForgeOS v0.9 (x86_64, ring 3)");
+        cat(l2, "OS: ForgeOS v0.10 (x86_64, ring 3)");
         cat(l4, "Uptime: ");
         num_into(l4, si.ticks / 100);
         cat(l4, "s");
@@ -298,15 +293,15 @@ namespace {
         cat(l7, " KiB");
         cat(l8, "Procs: ");
         num_into(l8, si.tasks);
-        cat(l8, " | FS: ramdisk");
+        cat(l8, " | FS: ramdisk | GUI: yes");
 
         const char* info[10] = {
             l0,
             "------------------------------------",
             l2,
-            "Kernel: forge-0.9 (phase 9: vfs)",
+            "Kernel: forge-0.10 (phase 10: gui)",
             l4,
-            "Shell: fsh 1.1",
+            "Shell: fsh 1.2",
             "CPU: x86_64 Long Mode @ PIT 100Hz",
             l7,
             l8,
@@ -342,6 +337,7 @@ namespace {
         if (streq(cmd, "uptime"))       { cmd_uptime(); return; }
         if (streq(cmd, "forgefetch"))   { cmd_forgefetch(); return; }
         if (streq(cmd, "ls"))           { cmd_ls(); return; }
+        if (streq(cmd, "gui"))          { sys_gui(); sys_write("modo grafico ativo - ESC volta ao terminal\n"); return; }
         if (streq(cmd, "exit"))         { sys_exit(); return; }
         if (starts_with(cmd, "touch ")) { cmd_touch(skip_word(cmd)); return; }
         if (starts_with(cmd, "write ")) { cmd_write(skip_word(cmd)); return; }
@@ -356,7 +352,7 @@ namespace {
 
 extern "C" void _start() {
     sys_setcolor(COL_LGREY, COL_BLACK);
-    sys_write("ForgeOS shell (fsh 1.1) - digite 'help' ou 'forgefetch'\n");
+    sys_write("ForgeOS shell (fsh 1.2) - digite 'help', 'forgefetch' ou 'gui'\n");
 
     while (true) {
         sys_setcolor(COL_LGREEN, COL_BLACK);

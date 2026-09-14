@@ -21,6 +21,7 @@ namespace Forge {
         constexpr uint64_t SYS_LS       = 13;
         constexpr uint64_t SYS_RM       = 14;
         constexpr uint64_t SYS_FWRITE   = 15;
+        constexpr uint64_t SYS_GUI      = 16;
 
         void syscall_handler(Interrupts::InterruptFrame* frame);
     }

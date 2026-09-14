@@ -12,7 +12,7 @@ namespace Forge {
             volatile uint64_t head = 0;
             volatile uint64_t tail = 0;
             bool shift = false;
-            bool e0 = false; // prefixo de teclas estendidas (setas, etc.)
+            bool e0 = false;
 
             const char map_norm[128] = {
                 /* 0x00 */ 0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b', 0,
@@ -53,25 +53,25 @@ namespace Forge {
 
             if (sc == 0xE0) { e0 = true; return; }
 
-            // Break codes: soltou tecla (também encerra sequência estendida)
             if (sc & 0x80) {
                 if (sc == 0xAA || sc == 0xB6) shift = false;
                 e0 = false;
                 return;
             }
 
-            // Teclas estendidas (prefixo 0xE0): setas e edição
+            if (sc == 0x01) { push_char(8); return; } // ESC = código especial 8
+
             if (e0) {
                 e0 = false;
                 char special = 0;
                 switch (sc) {
-                    case 0x48: special = 1; break; // UP
-                    case 0x50: special = 2; break; // DOWN
-                    case 0x4B: special = 3; break; // LEFT
-                    case 0x4D: special = 4; break; // RIGHT
-                    case 0x47: special = 5; break; // HOME
-                    case 0x4F: special = 6; break; // END
-                    case 0x53: special = 7; break; // DELETE
+                    case 0x48: special = 1; break;
+                    case 0x50: special = 2; break;
+                    case 0x4B: special = 3; break;
+                    case 0x4D: special = 4; break;
+                    case 0x47: special = 5; break;
+                    case 0x4F: special = 6; break;
+                    case 0x53: special = 7; break;
                     default: return;
                 }
                 push_char(special);

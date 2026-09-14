@@ -7,6 +7,7 @@
 #include "pmm.h"
 #include "sysinfo.h"
 #include "vfs.h"
+#include "gui.h"
 
 namespace Forge {
     namespace Syscall {
@@ -23,9 +24,15 @@ namespace Forge {
                 while (v > 0) { t[i--] = (char)('0' + (v % 10)); v /= 10; }
                 str_cat(dst, &t[i + 1]);
             }
+
+            // Foco de teclado: durante a sessão gráfica, SOMENTE a task GUI
+            // pode ler teclas. Qualquer outra tarefa é barrada aqui.
+            bool keyboard_locked_for_current() {
+                return Gui::active() &&
+                Kernel::current_task_id() != Gui::task_id();
+            }
         }
 
-        // ABI: rax = número, rdi = arg0, rsi = arg1, rdx = arg2. Retorno em rax.
         void syscall_handler(Interrupts::InterruptFrame* frame) {
             uint64_t num = frame->rax;
             uint64_t a0  = frame->rdi;
@@ -51,6 +58,7 @@ namespace Forge {
                     Kernel::task_exit();
                     break;
                 case SYS_READLINE: {
+                    if (keyboard_locked_for_current()) { ret = 0; break; }
                     char* ub = (char*)a0;
                     uint64_t max = a1;
                     uint64_t len = 0;
@@ -105,39 +113,30 @@ namespace Forge {
                     Console::set_color((Console::Color)a0, (Console::Color)a1);
                     break;
                 case SYS_GETCHAR:
+                    if (keyboard_locked_for_current()) { ret = (uint64_t)-1; break; }
                     ret = (uint64_t)(int64_t)Drivers::keyboard_get_char();
                     break;
-                case SYS_OPEN: {
-                    const char* name = (const char*)a0;
-                    int flags = (int)a1;
-                    ret = (uint64_t)(int64_t)VFS::vfs_open(name, flags);
+                case SYS_OPEN:
+                    ret = (uint64_t)(int64_t)VFS::vfs_open((const char*)a0, (int)a1);
                     break;
-                }
-                case SYS_READ: {
-                    int fd = (int)a0;
-                    uint8_t* buf = (uint8_t*)a1;
-                    uint32_t n = (uint32_t)a2;
-                    ret = (uint64_t)(int64_t)VFS::vfs_read(fd, buf, n);
+                case SYS_READ:
+                    ret = (uint64_t)(int64_t)VFS::vfs_read((int)a0, (uint8_t*)a1, (uint32_t)a2);
                     break;
-                }
-                case SYS_FWRITE: {
-                    int fd = (int)a0;
-                    const uint8_t* buf = (const uint8_t*)a1;
-                    uint32_t n = (uint32_t)a2;
-                    ret = (uint64_t)(int64_t)VFS::vfs_write(fd, buf, n);
+                case SYS_FWRITE:
+                    ret = (uint64_t)(int64_t)VFS::vfs_write((int)a0, (const uint8_t*)a1, (uint32_t)a2);
                     break;
-                }
                 case SYS_CLOSE:
                     ret = (uint64_t)(int64_t)VFS::vfs_close((int)a0);
                     break;
-                case SYS_LS: {
-                    char* buf = (char*)a0;
-                    uint32_t maxlen = (uint32_t)a1;
-                    ret = (uint64_t)VFS::vfs_ls(buf, maxlen);
+                case SYS_LS:
+                    ret = (uint64_t)VFS::vfs_ls((char*)a0, (uint32_t)a1);
                     break;
-                }
                 case SYS_RM:
                     ret = (uint64_t)(int64_t)VFS::vfs_rm((const char*)a0);
+                    break;
+                case SYS_GUI:
+                    Gui::gui_start();
+                    ret = 0;
                     break;
                 default:
                     ret = (uint64_t)-1;

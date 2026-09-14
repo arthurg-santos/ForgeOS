@@ -4,16 +4,13 @@ CXX = g++
 ASM = nasm
 LD = gcc
 
-# Flags do kernel
 CFLAGS = -ffreestanding -fno-pie -fno-pic -mno-red-zone -mcmodel=kernel -nostdlib -fno-builtin -Wall -Wextra -O2 -g -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-80387
 CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti
 ASMFLAGS = -f elf64
 LDFLAGS = -ffreestanding -nostdlib -lgcc -no-pie -T linker/linker.ld
 
-# Flags dos PROGRAMAS DE USUÁRIO
 USER_CXXFLAGS = -ffreestanding -fno-pie -fno-pic -mno-red-zone -mcmodel=small -nostdlib -fno-builtin -Wall -Wextra -O2 -g -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-80387 -fno-exceptions -fno-rtti
 
-# Diretórios e Arquivos
 BUILD_DIR = build
 ISO_DIR = $(BUILD_DIR)/iso
 KERNEL_ELF = $(BUILD_DIR)/forgeos.elf
@@ -21,9 +18,10 @@ ISO_NAME = $(BUILD_DIR)/forgeos.iso
 
 CXX_SOURCES = kernel/main.cpp kernel/io.cpp kernel/irq.cpp kernel/scheduler.cpp \
               kernel/syscall.cpp kernel/elf.cpp kernel/ramdisk.cpp kernel/vfs.cpp \
+              kernel/gui.cpp \
               arch/x86_64/gdt.cpp arch/x86_64/idt.cpp arch/x86_64/pic.cpp \
               arch/x86_64/serial.cpp memory/pmm.cpp memory/vmm.cpp memory/kheap.cpp \
-              drivers/timer.cpp drivers/keyboard.cpp
+              drivers/timer.cpp drivers/keyboard.cpp drivers/mouse.cpp drivers/graphics.cpp
 ASM_SOURCES = boot/multiboot2_header.asm boot/entry.asm \
               arch/x86_64/interrupts.asm arch/x86_64/cpu_asm.asm \
               arch/x86_64/context.asm
@@ -35,7 +33,7 @@ OBJECTS = $(CXX_OBJECTS) $(ASM_OBJECTS) $(BLOB_OBJECTS)
 
 INCLUDES = -Iinclude -Iarch/x86_64 -Imemory -Ikernel -Idrivers
 
-.PHONY: all clean run debug dirs
+.PHONY: all clean run play debug dirs
 
 all: dirs $(ISO_NAME)
 
@@ -74,8 +72,13 @@ $(ISO_NAME): $(KERNEL_ELF)
 	@cp scripts/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
 	@grub2-mkrescue -o $@ $(ISO_DIR) --modules="multiboot2" 2>/dev/null || grub-mkrescue -o $@ $(ISO_DIR) --modules="multiboot2" 2>/dev/null
 
+# Harness de DEBUG: pausa em crash/shutdown, preserva a tela para inspeção
 run: all
 	@qemu-system-x86_64 -cdrom $(ISO_NAME) -m 128M -vga std -serial stdio -no-reboot -no-shutdown -d int,cpu_reset -D $(BUILD_DIR)/qemu.log
+
+# Modo REAL: DESLIGAR fecha a VM, REINICIAR volta no GRUB e re-boota
+play: all
+	@qemu-system-x86_64 -cdrom $(ISO_NAME) -m 128M -vga std -serial stdio -d int,cpu_reset -D $(BUILD_DIR)/qemu.log
 
 debug: all
 	@qemu-system-x86_64 -cdrom $(ISO_NAME) -m 128M -vga std -serial stdio -no-reboot -no-shutdown -s -S &
