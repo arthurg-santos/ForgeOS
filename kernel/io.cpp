@@ -1,10 +1,14 @@
 #include "io.h"
+#include "io_ports.h"
 
 namespace Forge {
     namespace Console {
         volatile uint16_t* vga_buffer = (volatile uint16_t*)0xB8000;
         const size_t VGA_WIDTH = 80;
         const size_t VGA_HEIGHT = 25;
+
+        constexpr uint16_t CRTC_INDEX = 0x3D4;
+        constexpr uint16_t CRTC_DATA  = 0x3D5;
 
         size_t terminal_row;
         size_t terminal_column;
@@ -14,6 +18,14 @@ namespace Forge {
             uint16_t c = (uint8_t)uc;
             uint16_t col = color;
             return c | (col << 8);
+        }
+
+        void update_cursor() {
+            uint16_t pos = (uint16_t)(terminal_row * VGA_WIDTH + terminal_column);
+            outb(CRTC_INDEX, 0x0F);
+            outb(CRTC_DATA, (uint8_t)(pos & 0xFF));
+            outb(CRTC_INDEX, 0x0E);
+            outb(CRTC_DATA, (uint8_t)((pos >> 8) & 0xFF));
         }
 
         void init() {
@@ -32,10 +44,9 @@ namespace Forge {
             }
             terminal_row = 0;
             terminal_column = 0;
+            update_cursor();
         }
 
-        // Rola a tela uma linha para cima (preserva histórico),
-        // em vez de apagar tudo quando o texto ultrapassa o fim.
         void scroll_up() {
             for (size_t y = 0; y < VGA_HEIGHT - 1; y++) {
                 for (size_t x = 0; x < VGA_WIDTH; x++) {
@@ -52,6 +63,20 @@ namespace Forge {
         }
 
         void put_char(char c) {
+            // Move cursor sem apagar (necessário para edição de linha)
+            if (c == '\x01') {
+                if (terminal_column > 0) terminal_column--;
+                else if (terminal_row > 0) { terminal_row--; terminal_column = VGA_WIDTH - 1; }
+                update_cursor();
+                return;
+            }
+            if (c == '\x02') {
+                if (terminal_column < VGA_WIDTH - 1) terminal_column++;
+                else if (terminal_row < VGA_HEIGHT - 1) { terminal_row++; terminal_column = 0; }
+                update_cursor();
+                return;
+            }
+
             if (c == '\n') {
                 terminal_row++;
                 terminal_column = 0;
@@ -59,6 +84,22 @@ namespace Forge {
                     terminal_row = VGA_HEIGHT - 1;
                     scroll_up();
                 }
+                update_cursor();
+                return;
+            }
+
+            if (c == '\b') {
+                if (terminal_column > 0) {
+                    terminal_column--;
+                } else if (terminal_row > 0) {
+                    terminal_row--;
+                    terminal_column = VGA_WIDTH - 1;
+                } else {
+                    return;
+                }
+                vga_buffer[terminal_row * VGA_WIDTH + terminal_column] =
+                vga_entry(' ', terminal_color);
+                update_cursor();
                 return;
             }
 
@@ -74,6 +115,7 @@ namespace Forge {
             size_t index = terminal_row * VGA_WIDTH + terminal_column;
             vga_buffer[index] = vga_entry(c, terminal_color);
             terminal_column++;
+            update_cursor();
         }
 
         void print(const char* str) {

@@ -20,14 +20,15 @@ namespace Forge {
             constexpr uint64_t USER_STACK_PAGES = 4; // 16 KiB
 
             struct Task {
-                uint64_t rsp;            // rsp salvo pelo switch_context
+                uint64_t rsp;
                 uint64_t id;
                 bool alive;
                 bool is_user;
-                uint64_t pml4_phys;      // address space do processo
-                uint64_t kernel_top;     // topo da kernel stack (=> TSS.rsp0)
-                uint64_t user_stack_top; // topo da stack de ring 3 (VA)
-                uint64_t user_entry;     // RIP inicial em ring 3
+                uint64_t pml4_phys;
+                uint64_t kernel_top;
+                uint64_t user_stack_top;
+                uint64_t user_entry;
+                char name[16];
             };
 
             Task tasks[MAX_TASKS];
@@ -35,6 +36,12 @@ namespace Forge {
             int current = 0;
 
             void user_trampoline();
+
+            void set_name(Task* t, const char* name) {
+                int i = 0;
+                for (; i < 15 && name[i] != '\0'; i++) t->name[i] = name[i];
+                t->name[i] = '\0';
+            }
         }
 
         void scheduler_init() {
@@ -47,10 +54,12 @@ namespace Forge {
                 tasks[i].kernel_top = 0;
                 tasks[i].user_stack_top = 0;
                 tasks[i].user_entry = 0;
+                tasks[i].name[0] = '\0';
             }
             tasks[0].alive = true;
             tasks[0].kernel_top = (uint64_t)&stack_top;
             tasks[0].pml4_phys = Memory::vmm_current_pml4();
+            set_name(&tasks[0], "idle");
             task_count = 1;
             current = 0;
             CPU::set_tss_rsp0(tasks[0].kernel_top);
@@ -74,22 +83,20 @@ namespace Forge {
             tasks[slot].is_user = false;
             tasks[slot].pml4_phys = Memory::vmm_current_pml4();
             tasks[slot].kernel_top = top;
+            set_name(&tasks[slot], "kthread");
             Interrupts::klog_hex("sched: created kernel task", (uint64_t)slot);
             return slot;
         }
 
-        int process_create(const uint8_t* elf_blob, uint64_t size) {
+        int process_create(const uint8_t* elf_blob, uint64_t size, const char* name) {
             if (task_count >= MAX_TASKS) return -1;
 
-            // 1. Address space isolado (PDPT privado + ramos de kernel)
             uint64_t space = Memory::vmm_new_address_space();
             if (space == 0) return -1;
 
-            // 2. Carrega o ELF no espaço do processo (VAs >= 1 GiB)
             uint64_t entry = Elf::elf_load(space, elf_blob, size);
             if (entry == 0) return -1;
 
-            // 3. User stack privada em USER_STACK_VA
             for (uint64_t i = 0; i < USER_STACK_PAGES; i++) {
                 uint64_t pa = Memory::pmm_alloc_page();
                 if (pa == 0) return -1;
@@ -99,7 +106,6 @@ namespace Forge {
                     }
             }
 
-            // 4. Kernel stack + frame sintético -> trampoline -> ring 3
             void* kstack = Memory::kmalloc(TASK_STACK_SIZE);
             if (kstack == nullptr) return -1;
             uint64_t top = ((uint64_t)kstack + TASK_STACK_SIZE) & ~15ULL;
@@ -116,6 +122,7 @@ namespace Forge {
             tasks[slot].kernel_top = top;
             tasks[slot].user_stack_top = USER_STACK_VA + USER_STACK_PAGES * 4096;
             tasks[slot].user_entry = entry;
+            set_name(&tasks[slot], name);
             Interrupts::klog_hex("sched: created PROCESS", (uint64_t)slot);
             return slot;
         }
@@ -127,18 +134,18 @@ namespace Forge {
                 uint64_t uentry = t->user_entry;
                 CPU::set_tss_rsp0(t->kernel_top);
                 __asm__ __volatile__(
-                    "mov $0x33, %%ax\n"   // User Data | RPL3
+                    "mov $0x33, %%ax\n"
                     "mov %%ax, %%ds\n"
                     "mov %%ax, %%es\n"
-                    "pushq $0x33\n"       // SS  (user)
-                "pushq %0\n"          // RSP (user, VA privado)
-                "pushq $0x202\n"      // RFLAGS (IF=1)
-                "pushq $0x2B\n"       // CS  (user)
-                "pushq %1\n"          // RIP (entry do ELF)
-                "iretq\n"
-                :
-                : "r"(ustack), "r"(uentry)
-                : "rax", "memory");
+                    "pushq $0x33\n"
+                    "pushq %0\n"
+                    "pushq $0x202\n"
+                    "pushq $0x2B\n"
+                    "pushq %1\n"
+                    "iretq\n"
+                    :
+                    : "r"(ustack), "r"(uentry)
+                    : "rax", "memory");
                 __builtin_unreachable();
             }
         }
@@ -163,9 +170,20 @@ namespace Forge {
         void task_exit() {
             tasks[current].alive = false;
             Interrupts::klog_hex("sched: task exited", tasks[current].id);
-            while (true) schedule(); // nunca retorna
+            while (true) schedule();
         }
 
         uint64_t current_task_id() { return tasks[current].id; }
+
+        uint64_t proc_count() { return (uint64_t)task_count; }
+
+        bool proc_snapshot(int idx, ProcEntry* out) {
+            if (idx < 0 || idx >= task_count) return false;
+            out->id = tasks[idx].id;
+            out->alive = tasks[idx].alive ? 1 : 0;
+            out->is_user = tasks[idx].is_user ? 1 : 0;
+            for (int i = 0; i < 16; i++) out->name[i] = tasks[idx].name[i];
+            return true;
+        }
     }
 }
