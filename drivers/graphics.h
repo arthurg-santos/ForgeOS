@@ -11,12 +11,13 @@ namespace Forge {
             bool ok;
         };
 
+        // Verifica SEM mudar modo de vídeo: existe display bochs/VBE dispi?
+        bool gfx_probe();
+
         bool gfx_init(uint32_t w, uint32_t h, uint32_t bpp);
         void gfx_disable();
         const FBInfo& gfx_info();
 
-        // Copia o backbuffer offscreen para o framebuffer de uma vez
-        // (double buffering: elimina o flicker de redraw direto).
         void gfx_present();
 
         void gfx_pixel(uint32_t x, uint32_t y, uint32_t color);

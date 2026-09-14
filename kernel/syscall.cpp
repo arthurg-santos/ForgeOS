@@ -8,6 +8,7 @@
 #include "sysinfo.h"
 #include "vfs.h"
 #include "gui.h"
+#include "graphics.h"
 
 namespace Forge {
     namespace Syscall {
@@ -25,8 +26,6 @@ namespace Forge {
                 str_cat(dst, &t[i + 1]);
             }
 
-            // Foco de teclado: durante a sessão gráfica, SOMENTE a task GUI
-            // pode ler teclas. Qualquer outra tarefa é barrada aqui.
             bool keyboard_locked_for_current() {
                 return Gui::active() &&
                 Kernel::current_task_id() != Gui::task_id();
@@ -135,8 +134,19 @@ namespace Forge {
                     ret = (uint64_t)(int64_t)VFS::vfs_rm((const char*)a0);
                     break;
                 case SYS_GUI:
-                    Gui::gui_start();
-                    ret = 0;
+                    // Probe-before-touch: nunca muda o modo de vídeo sem
+                    // confirmar que o hardware é o display bochs/QEMU.
+                    if (!Graphics::gfx_probe()) {
+                        __asm__ __volatile__("cli");
+                        Console::println("gui: display bochs/VBE nao detectado.");
+                        Console::println("gui: GUI disponivel apenas no QEMU (-vga std) por enquanto.");
+                        Console::println("gui: neste hardware, use o terminal. (Nada foi alterado no video.)");
+                        __asm__ __volatile__("sti");
+                        ret = (uint64_t)-1;
+                    } else {
+                        Gui::gui_start();
+                        ret = 0;
+                    }
                     break;
                 default:
                     ret = (uint64_t)-1;

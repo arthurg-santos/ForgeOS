@@ -8,11 +8,16 @@ namespace Forge {
     namespace Graphics {
         namespace {
             FBInfo fb = {0, 0, 0, 0, 0, false};
-            uint32_t* back = nullptr; // backbuffer offscreen (double buffering)
+            uint32_t* back = nullptr;
 
             inline uint32_t inl(uint16_t port) {
                 uint32_t v;
                 __asm__ __volatile__("inl %1, %0" : "=a"(v) : "Nd"(port));
+                return v;
+            }
+            inline uint16_t inw(uint16_t port) {
+                uint16_t v;
+                __asm__ __volatile__("inw %1, %0" : "=a"(v) : "Nd"(port));
                 return v;
             }
             inline void outl(uint16_t port, uint32_t v) {
@@ -42,9 +47,14 @@ namespace Forge {
 
             constexpr uint16_t VBE_INDEX = 0x1CE;
             constexpr uint16_t VBE_DATA  = 0x1CF;
+            constexpr uint16_t VBE_ID    = 0xB0C4;
             void vbe_write(uint16_t reg, uint16_t val) {
                 outw(VBE_INDEX, reg);
                 outw(VBE_DATA, val);
+            }
+            uint16_t vbe_read(uint16_t reg) {
+                outw(VBE_INDEX, reg);
+                return inw(VBE_DATA);
             }
 
             struct FG { char c; uint8_t r[8]; };
@@ -101,15 +111,35 @@ namespace Forge {
             }
         }
 
-        bool gfx_init(uint32_t w, uint32_t h, uint32_t bpp) {
+        // PROBE: verifica sem alterar nada no hardware de vídeo.
+        bool gfx_probe() {
             uint64_t bar0 = find_vga_bar0();
             if (bar0 == 0) {
-                Interrupts::klog("gfx: no VGA controller found on PCI");
+                Interrupts::klog("gfx probe: nenhum display controller com BAR0");
                 return false;
             }
+            // Readback do ID dispi: só o bochs/QEMU responde 0xB0C4.
+            // Em GPU real (Intel/AMD/NVIDIA) estas portas não existem ou
+            // retornam lixo — e tocar nelas/assumir BAR0 como framebuffer
+            // foi exatamente o que causou a tela preta no i5.
+            vbe_write(0, VBE_ID);
+            uint16_t id = vbe_read(0);
+            if (id != VBE_ID) {
+                Interrupts::klog_hex("gfx probe: dispi ausente (id lido)", id);
+                return false;
+            }
+            return true;
+        }
+
+        bool gfx_init(uint32_t w, uint32_t h, uint32_t bpp) {
+            if (!gfx_probe()) {
+                Interrupts::klog("gfx: init abortado (probe falhou)");
+                return false;
+            }
+            uint64_t bar0 = find_vga_bar0();
             Interrupts::klog_hex("gfx: VGA BAR0", bar0);
 
-            vbe_write(0, 0xB0C4);
+            vbe_write(0, VBE_ID);
             vbe_write(1, (uint16_t)w);
             vbe_write(2, (uint16_t)h);
             vbe_write(3, (uint16_t)bpp);
@@ -127,14 +157,15 @@ namespace Forge {
                 uint64_t pa = bar0 + i * 4096;
                 if (!Memory::vmm_map_page(pa, pa, Memory::VMM_PRESENT | Memory::VMM_WRITABLE)) {
                     Interrupts::klog("gfx: FATAL mapping framebuffer");
+                    gfx_disable(); // restaura modo texto antes de sair
                     return false;
                 }
             }
 
-            // Backbuffer offscreen para double buffering
             back = (uint32_t*)Memory::kmalloc(bytes);
             if (back == nullptr) {
                 Interrupts::klog("gfx: FATAL no backbuffer");
+                gfx_disable();
                 return false;
             }
 
