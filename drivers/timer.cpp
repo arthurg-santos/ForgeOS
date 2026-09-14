@@ -22,7 +22,9 @@ namespace Forge {
         }
 
         void timer_tick() {
-            ticks++;
+            // Leitura + escrita simples: o padrão aceito para volatile
+            // (incremento ++/compound assignment em volatile é deprecated).
+            ticks = ticks + 1;
             if (ticks % TICKS_PER_SCHEDULE == 0) {
                 Kernel::schedule(); // preempção por timer
             }

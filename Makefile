@@ -4,11 +4,14 @@ CXX = g++
 ASM = nasm
 LD = gcc
 
-# Flags de compilação (freestanding + sem XMM/x87 no código gerado)
+# Flags do kernel (freestanding + sem XMM/x87 no código gerado)
 CFLAGS = -ffreestanding -fno-pie -fno-pic -mno-red-zone -mcmodel=kernel -nostdlib -fno-builtin -Wall -Wextra -O2 -g -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-80387
 CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti
 ASMFLAGS = -f elf64
 LDFLAGS = -ffreestanding -nostdlib -lgcc -no-pie -T linker/linker.ld
+
+# Flags dos PROGRAMAS DE USUÁRIO (binários ELF separados, VA 0x400000)
+USER_CXXFLAGS = -ffreestanding -fno-pie -fno-pic -mno-red-zone -mcmodel=small -nostdlib -fno-builtin -Wall -Wextra -O2 -g -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-80387 -fno-exceptions -fno-rtti
 
 # Diretórios e Arquivos
 BUILD_DIR = build
@@ -17,20 +20,21 @@ KERNEL_ELF = $(BUILD_DIR)/forgeos.elf
 ISO_NAME = $(BUILD_DIR)/forgeos.iso
 
 CXX_SOURCES = kernel/main.cpp kernel/io.cpp kernel/irq.cpp kernel/scheduler.cpp \
-              kernel/syscall.cpp \
+              kernel/syscall.cpp kernel/elf.cpp \
               arch/x86_64/gdt.cpp arch/x86_64/idt.cpp arch/x86_64/pic.cpp \
               arch/x86_64/serial.cpp memory/pmm.cpp memory/vmm.cpp memory/kheap.cpp \
-              drivers/timer.cpp user/user_program.cpp
+              drivers/timer.cpp
 ASM_SOURCES = boot/multiboot2_header.asm boot/entry.asm \
               arch/x86_64/interrupts.asm arch/x86_64/cpu_asm.asm \
               arch/x86_64/context.asm
 
 CXX_OBJECTS = $(CXX_SOURCES:%.cpp=$(BUILD_DIR)/%.o)
 ASM_OBJECTS = $(ASM_SOURCES:%.asm=$(BUILD_DIR)/%.o)
-OBJECTS = $(CXX_OBJECTS) $(ASM_OBJECTS)
+BLOB_OBJECTS = $(BUILD_DIR)/user/init_elf.o
+OBJECTS = $(CXX_OBJECTS) $(ASM_OBJECTS) $(BLOB_OBJECTS)
 
 # Caminhos de headers
-INCLUDES = -Iinclude -Iarch/x86_64 -Imemory -Ikernel -Idrivers -Iuser
+INCLUDES = -Iinclude -Iarch/x86_64 -Imemory -Ikernel -Idrivers
 
 .PHONY: all clean run debug dirs
 
@@ -44,6 +48,19 @@ dirs:
 	@mkdir -p $(BUILD_DIR)/drivers
 	@mkdir -p $(BUILD_DIR)/user
 	@mkdir -p $(ISO_DIR)/boot/grub
+
+# --- Pipeline do programa de usuário: ELF separado -> blob embutido ---
+$(BUILD_DIR)/user/init.o: user/programs/init.cpp user/lib/user_syscalls.h user/user.ld
+	@mkdir -p $(BUILD_DIR)/user
+	$(CXX) $(USER_CXXFLAGS) -Iuser/lib -c user/programs/init.cpp -o $@
+
+$(BUILD_DIR)/user/init.elf: $(BUILD_DIR)/user/init.o user/user.ld
+	$(LD) -nostdlib -no-pie -T user/user.ld -o $@ $(BUILD_DIR)/user/init.o
+
+# -b binary é opção do LD (não do driver gcc): embute o ELF como seção .data
+$(BUILD_DIR)/user/init_elf.o: $(BUILD_DIR)/user/init.elf
+	cd $(BUILD_DIR)/user && ld -r -b binary -o init_elf.o init.elf
+# ---------------------------------------------------------------------
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)

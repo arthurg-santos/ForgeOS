@@ -8,9 +8,12 @@
 #include "kheap.h"
 #include "scheduler.h"
 #include "timer.h"
-#include "user_program.h"
 
 extern "C" uint64_t multiboot2_info_addr;
+
+// Blob ELF embutido na imagem do kernel (ld -r -b binary)
+extern "C" uint8_t _binary_init_elf_start[];
+extern "C" uint8_t _binary_init_elf_end[];
 
 extern "C" void kernel_main() {
     Forge::Console::init();
@@ -18,12 +21,12 @@ extern "C" void kernel_main() {
     Forge::Interrupts::klog("kernel_main entered");
 
     Forge::Console::set_color(Forge::Console::LightGreen, Forge::Console::Black);
-    Forge::Console::println("ForgeOS v0.6 - Phase 6: User Mode + Syscalls");
+    Forge::Console::println("ForgeOS v0.7 - Phase 7: ELF Loader + Address Spaces");
     Forge::Console::set_color(Forge::Console::White, Forge::Console::Black);
 
     Forge::Console::println("Initializing GDT and TSS...");
     Forge::CPU::gdt_init();
-    Forge::Console::println("GDT loaded successfully (user segments added).");
+    Forge::Console::println("GDT loaded successfully.");
 
     Forge::Console::println("Initializing PIC...");
     Forge::Interrupts::pic_init();
@@ -44,7 +47,7 @@ extern "C" void kernel_main() {
 
     Forge::Console::println("Initializing Virtual Memory Manager...");
     Forge::Memory::vmm_init();
-    Forge::Console::println("VMM online (CR3 switched, user bit on low map).");
+    Forge::Console::println("VMM online (kernel-only low map).");
 
     Forge::Console::println("Initializing kernel heap (kmalloc)...");
     Forge::Memory::kheap_init();
@@ -54,13 +57,17 @@ extern "C" void kernel_main() {
     Forge::Kernel::scheduler_init();
     Forge::Drivers::timer_init(100);
 
-    Forge::Console::println("Launching user tasks in ring 3...");
-    Forge::Kernel::task_create_user(Forge::User::user_main_a);
-    Forge::Kernel::task_create_user(Forge::User::user_main_b);
-    Forge::Console::println("Scheduler live. Idle task looping (timer preempts).");
+    uint64_t elf_size = (uint64_t)(_binary_init_elf_end - _binary_init_elf_start);
+    Forge::Console::print("Loading ELF process image (");
+    Forge::Console::print_dec(elf_size);
+    Forge::Console::println(" bytes)...");
+
+    Forge::Kernel::process_create(_binary_init_elf_start, elf_size);
+    Forge::Kernel::process_create(_binary_init_elf_start, elf_size);
+
+    Forge::Console::println("Scheduler live. Two isolated processes from one ELF.");
     Forge::Console::println("");
 
-    // Task 0 (idle): espera interrupções. O timer preempta para as tasks user.
     while (true) {
         __asm__ __volatile__("hlt");
     }

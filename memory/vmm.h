@@ -14,6 +14,12 @@ namespace Forge {
         bool vmm_unmap_page(uint64_t va);
         uint64_t vmm_get_phys(uint64_t va);
         uint64_t vmm_current_pml4();
+
+        // Fase 7: espaços de endereço isolados por processo
+        uint64_t vmm_new_address_space();
+        bool vmm_map_page_in(uint64_t pml4_phys, uint64_t va, uint64_t pa, uint64_t flags);
+        uint64_t vmm_get_phys_in(uint64_t pml4_phys, uint64_t va);
+        void vmm_load_cr3(uint64_t pml4_phys);
     }
 }
 
